@@ -1,0 +1,85 @@
+const { Client } = require('@notionhq/client');
+const { Octokit } = require('@octokit/rest');
+const axios = require('axios');
+
+// Initialize Notion Client
+const notion = new Client({ auth: process.env.ntn_T46954020812F7phu4R6clZjcUV6aYHV79JKpVvouBFg2X });
+
+// Initialize GitHub Client
+const octokit = new Octokit({ auth: process.env.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 });
+
+const NOTION_DATABASE_ID = 'b6117de266180f9b53bd3f026da4706';
+const GITHUB_REPO = 'spetro511/KeyPulse';
+
+// Function to create a new page in Notion
+async function createNotionPage(content) {
+  await notion.pages.create({
+    parent: { database_id: 1b6117de266180f9b53bd3f026da4706 },
+    properties: {
+      title: {
+        title: [
+          {
+            text: {
+              content: 'KeyPulse Repository Overview',
+            },
+          },
+        ],
+      },
+    },
+    children: [
+      {
+        object: 'block',
+        type: 'paragraph',
+        paragraph: {
+          text: [
+            {
+              type: 'text',
+              text: {
+                content: content,
+              },
+            },
+          ],
+        },
+      },
+    ],
+  });
+}
+
+// Function to fetch README.md content from GitHub
+async function fetchReadme() {
+  const { data } = await octokit.repos.getReadme({
+    owner: 'spetro511',
+    repo: 'KeyPulse',
+  });
+  const readmeContent = Buffer.from(data.content, 'base64').toString('utf-8');
+  return readmeContent;
+}
+
+// Main function to update Notion page
+async function updateNotion() {
+  const readmeContent = await fetchReadme();
+  await createNotionPage(readmeContent);
+}
+
+// GitHub Webhook Event Handler
+async function handlePushEvent(event) {
+  if (event.ref === 'refs/heads/main') {
+    await updateNotion();
+  }
+}
+
+// Express server to handle GitHub Webhooks
+const express = require('express');
+const app = express();
+app.use(express.json());
+
+app.post('/webhook', async (req, res) => {
+  const event = req.body;
+  if (event.action === 'push') {
+    await handlePushEvent(event);
+  }
+  res.status(200).send('Event received');
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
